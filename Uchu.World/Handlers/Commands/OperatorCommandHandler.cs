@@ -1,3 +1,5 @@
+using RakDotNet;
+using RakDotNet.IO;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -80,8 +82,30 @@ namespace Uchu.World.Handlers.Commands
 
             if (!Directory.Exists(path)) Directory.CreateDirectory(path);
 
-            Zone.SaveSerialization(current, new[] {player}, Path.Combine(path, $"./{current.Id}_s.bin"));
-            Zone.SaveCreation(current, new[] {player}, Path.Combine(path, $"./{current.Id}_c.bin"));
+            using var stream = new MemoryStream();
+            using var writer = new BitWriter(stream);
+
+            writer.Write((byte)MessageIdentifier.ReplicaManagerSerialize);
+
+            player.Perspective.TryGetNetworkId(current, out var id);
+            writer.Write(id);
+
+            current.WriteSerialize(writer);
+
+            Utilities.SavePacket.Write(writer, Path.Combine(path, $"./{current.Id}_s.bin"));
+
+            using var stream2 = new MemoryStream();
+            using var writer2 = new BitWriter(stream2);
+
+            writer2.Write((byte)MessageIdentifier.ReplicaManagerConstruction);
+
+            writer2.WriteBit(true);
+            player.Perspective.Reveal(current, out var id2);
+            writer2.Write(id2);
+
+            current.WriteConstruct(writer2);
+
+            Utilities.SavePacket.Write(writer2, Path.Combine(path, $"./{current.Id}_c.bin"));
 
             return "Saved packets";
         }
